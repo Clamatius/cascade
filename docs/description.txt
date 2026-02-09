@@ -1,0 +1,39 @@
+Cascade is a simple word game.
+
+I originally wrote it for PlaySite in the early 2000s as an original game - although not that original, there are many like it. It was written as a Java applet along with the other PlaySite games (we were also running games.com for Hasbro).
+
+Cascade's a lot like Tetris (the first program I ever wrote, in 6502).
+
+The game board is an inverted pyramid of tiles.
+
+At game start:
+
+CASCADE
+
+was displayed in the top row, so that sets our pyramid size of 7 at the top. 1 less tile per row, down to 2 at the bottom.
+
+A new letter tile appears in random position in the top row every N ticks, and tiles move downwards (left, then right since it's not a grid). I had Qu as a special tile or Q's too big a problem iirc. The game is oppressively fast. No sound except the little tile-click of the tiles moving down - they all move at the same
+
+When the board is completed, it's cleared. For each row, if the word is in the dictionary, it's removed and the player scores points, significantly more for longer words than short. I was using a faux-Scrabble dictionary (the real one costs $$$ to license). If not in the dictionary, it clears but you don't score.
+
+
+Importantly, unlike Tetris, you can move tiles that hit the bottom back up and they start falling again, so you can have more than one tile falling at once, which lets you save a key letter on the edge if you're fast.
+
+Rounds are 2 minutes.
+
+
+Video showing the game (the only one I know of, and it wasn't me who recorded it): https://www.youtube.com/watch?v=1TAe_tCPCoo - 19 years ago! I grabbed an example screenshot which shows the board. The video doesn't show it, but the other element was a chat window and chat input box to the right, with a live scoreboard above it (adds to competive pressure).
+
+Player's description:
+===
+831 views  Sep 14, 2006
+Have you ever played cascade? It used to be playsite.com but now it's iwin.com instead. This game is very addictive. If you're new to this game and you wonder how people score over 200, take a look at this. My high is 256. I've seen people score over 300!
+===
+
+Multiplayer: in the PlaySite version, players would be in a lobby with other players. Each player got the same random seed to the letter sequence, so they'd all be playing the same letters. Although clearing rows makes it diverge quickly, sometimes you'd get a round with a ton of Qs or something and people would commiserate. There was a ~30s break (60s? I forget) between rounds and the players would chat, although it was often stuff like "gg", "gr" (good round) etc. It was rare to have unkind players, unlike the online games of today.
+
+Across PlaySite, the scoring system worked in tranches: you had a number score, but at given boundaries your level was higher and your name showed in different colours (iirc). Typical players would shiv their grandmother to make the number next to their name go up.
+
+Typical player on PlaySite was similar to WildTangent - ~55 year old female. I wrote a blog post about the game back in 2007 (2007_post.txt) and a single-digit # of players popped out of the woodwork - commenting as recently as last year.
+
+I think multiplayer seems like overkill, although I'm certain any players would like it. Static site seems like the way to go - a game that's JS-playable on a phone via web. Native in a pinch but I'd think web is doable for such a simple game.

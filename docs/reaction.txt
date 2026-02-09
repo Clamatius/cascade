@@ -1,0 +1,32 @@
+This was an easy game for me to write 20 years ago, and now I could do it in my sleep (although game dev's a long time in my rear view mirror). One day I should write Tetris again to see of the me of today can outperform the 15-year-old me. My training set was one spiral bound 6502 reference, 1 page for each instruction and 1 to define labels and give a hello-world example to do it. I think I'd definitely put Tetris up there on my lifetime achievement list, because I really don't think most people could have done it even if they wanted to.
+
+But after I typed up the Cascade description, you implemented it while I was in the shower. I'm good. I'm not _that_ good.
+
+META: my crystal ball is going wild. It's clear the job I've had is going away, to be replaced with some kind of AI wrangling job, which is highly likely to be just raw brainpower and connection to people in the know because everything is too new. Fortunately I'm good at just system 2, it's memory that gives me trouble, so I might be ok. A lot of people are about to be very screwed though.
+
+Ok, back to Cascade.
+
+Really close to perfect. First up let's commit before we lose your wonderful work.
+
+Then, random notes and me being an idiot as usual:
+
+1) your tile art is actually better than the sketches I had as placeholder art - the guy was supposed to give me final art and never did, so the game always had placeholder tiles...
+2) Tile spawn/fall rate is ~2x too fast rn.
+3) Once we display the title, we should despawn the tiles and start running 1 at a time
+4) I'd forgotten how the game worked! And this changes the game altogether as a player! Just as well I had the video. Here's the actual fix:
+
+The topmost row of tiles is your "hand". If you click or drag a tile it starts falling. and is replaced with a new one in 400ms. The fall movements are staggered, so the leftmost tile falls first then the next. ~150ms-200ms between movements. They don't fall by themself.
+
+This _mostly_ means you're trying for 2-letter word, 3-letter, etc, except that your hand will often get clogged with crap and you'll write-off a long-word row that's not happening.
+
+5) Man I love those tiles. And the tile-click sound is perfect. Hope they still look good and are small enough on a phone, we'll test. Where did you get the tiles from?
+6) Right now what happens if you drag a tile but don't put it back somewhere reasonable, it snaps back and overwrites the tile that fell into its place. which isn't right either way. Hmm. So, options:
+
+a) ghost: while I'm dragging a tile, a ghost tile supports any covering ones
+b) bejeweled-swap: if I drag a tile onto another tile, they swap places
+c) original cascade: you can only drag tiles that aren't covered - so top row is fine, falling is fine, but once there's something on top you have to move that first. You can't drag tiles through each other basically - you can actually hold tiles in mid-fall with your dragged one, although that's usually more difficult than helpful.
+
+Bejeweled-swap dramatically changes how the game works. May or may not be more fun. In normal Cascade, you're often screwing up a row because of the time pressure - it's part of the game. Given that players control the pace themselves, I think they'd end up dorking around with their letters to get a perfect board, where Cascade is supposed to be more... frenzied, I guess. We could make it a toggle, I guess. Either way you really don't have much time to mess around so making it a bit easier wouldn't be the worst.
+
+Ok, going back to this video from scazzyhead (thanks!) the point of it is to show how you can get a high score. Mostly, go fast. My girl in the video here's hitting 2 clicks a second, 4 or 5 in bursts. I think my typical score would be more like 50, 'cos I sucked at it (my wife rocked it, she was v good - but her fav game there was the boggle one called tangleword. she was so good people often accused her of cheating a few times).
+
