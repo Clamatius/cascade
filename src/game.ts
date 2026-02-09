@@ -38,6 +38,12 @@ export class Game {
   private timeLeft = ROUND_DURATION_S;
   private nextTileId = 0;
 
+  // High scores
+  private highScores: number[] = [];
+  private isNewHigh = false;
+  private static readonly STORAGE_KEY = 'cascade-high-scores';
+  private static readonly MAX_SCORES = 10;
+
   // Timers
   private roundTimer: number | null = null;
   private rafId: number | null = null;
@@ -67,6 +73,7 @@ export class Game {
     this.renderer = renderer;
     this.input = input;
     this.prng = new PRNG(Date.now());
+    this.highScores = this.loadHighScores();
 
     this.input.setBoard(this.board);
 
@@ -183,6 +190,7 @@ export class Game {
     this.stopTimers();
     this.phase = 'roundEnd';
     this.input.setEnabled(false);
+    this.isNewHigh = this.saveScore(this.score);
   }
 
   private stopTimers(): void {
@@ -192,6 +200,34 @@ export class Game {
     this.gravityTimers = [];
     this.refillTimers.forEach(t => clearTimeout(t));
     this.refillTimers.clear();
+  }
+
+  // ── High scores ─────────────────────────────────────────
+
+  private loadHighScores(): number[] {
+    try {
+      const raw = localStorage.getItem(Game.STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed.filter((n: unknown) => typeof n === 'number').slice(0, Game.MAX_SCORES);
+    } catch { /* ignore corrupt data */ }
+    return [];
+  }
+
+  /** Returns true if this score made the high score list */
+  private saveScore(score: number): boolean {
+    if (score <= 0) return false;
+    this.highScores.push(score);
+    this.highScores.sort((a, b) => b - a);
+    this.highScores = this.highScores.slice(0, Game.MAX_SCORES);
+    try {
+      localStorage.setItem(Game.STORAGE_KEY, JSON.stringify(this.highScores));
+    } catch { /* storage full or unavailable */ }
+    return this.highScores.includes(score);
+  }
+
+  private get bestScore(): number {
+    return this.highScores[0] ?? 0;
   }
 
   // ── Hand / Drop ───────────────────────────────────────────
@@ -478,7 +514,7 @@ export class Game {
     }
 
     // HUD
-    this.renderer.drawHUD(this.score, this.timeLeft, this.phase);
+    this.renderer.drawHUD(this.score, this.timeLeft, this.phase, this.bestScore);
 
     // Floating scores
     this.floatingScores = this.floatingScores.filter(fs => {
@@ -490,7 +526,7 @@ export class Game {
 
     // Round end overlay
     if (this.phase === 'roundEnd') {
-      this.renderer.drawRoundEnd(this.score);
+      this.renderer.drawRoundEnd(this.score, this.bestScore, this.isNewHigh, this.highScores);
     }
   }
 

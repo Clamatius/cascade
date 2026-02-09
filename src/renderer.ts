@@ -151,30 +151,35 @@ export class Renderer {
     this.ctx.fill();
   }
 
-  drawHUD(score: number, timeLeft: number, _phase: string): void {
+  drawHUD(score: number, timeLeft: number, _phase: string, highScore: number = 0): void {
     const ctx = this.ctx;
-    const { canvasW } = this.layout;
-    const hudY = 10;
+    const { canvasW, boardY } = this.layout;
+    const fontSize = Math.max(boardY * 0.35, 14);
+    const midY = boardY * 0.5;
 
     ctx.fillStyle = HUD_TEXT;
-    ctx.textBaseline = 'top';
 
-    // Timer - left side
+    // Timer - left
     const mins = Math.floor(timeLeft / 60);
     const secs = timeLeft % 60;
     const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
-    ctx.font = `bold 24px "Georgia", serif`;
+    ctx.font = `bold ${fontSize}px "Georgia", serif`;
     ctx.textAlign = 'left';
-    ctx.fillText(`Round ends in`, 10, hudY);
-    ctx.font = `bold 28px "Georgia", serif`;
-    ctx.fillText(timeStr, 10, hudY + 26);
+    ctx.textBaseline = 'middle';
+    ctx.fillText(timeStr, 10, midY);
 
-    // Score - right side
-    ctx.font = `bold 24px "Georgia", serif`;
-    ctx.textAlign = 'right';
-    ctx.fillText(`Score`, canvasW - 10, hudY);
-    ctx.font = `bold 28px "Georgia", serif`;
-    ctx.fillText(String(score), canvasW - 10, hudY + 26);
+    // Score - center
+    ctx.textAlign = 'center';
+    ctx.fillText(String(score), canvasW / 2, midY);
+
+    // High score - right
+    if (highScore > 0) {
+      const smallFont = Math.max(fontSize * 0.7, 11);
+      ctx.font = `${smallFont}px "Georgia", serif`;
+      ctx.textAlign = 'right';
+      ctx.fillStyle = '#a0c8a0';
+      ctx.fillText(`Best: ${highScore}`, canvasW - 10, midY);
+    }
   }
 
   drawFloatingScore(x: number, y: number, text: string, progress: number): void {
@@ -208,24 +213,56 @@ export class Renderer {
     ctx.fillText('Tap to Start', canvasW / 2, canvasH / 2 + 20);
   }
 
-  drawRoundEnd(score: number): void {
+  drawRoundEnd(score: number, highScore: number, isNewHigh: boolean, topScores: number[]): void {
     const ctx = this.ctx;
     const { canvasW, canvasH } = this.layout;
 
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
     ctx.fillRect(0, 0, canvasW, canvasH);
 
+    const cx = canvasW / 2;
+    let y = canvasH * 0.2;
+
     ctx.fillStyle = HUD_TEXT;
-    ctx.font = `bold 36px "Georgia", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Round Over!', canvasW / 2, canvasH / 2 - 40);
+
+    ctx.font = `bold 32px "Georgia", serif`;
+    ctx.fillText('Round Over', cx, y);
+    y += 50;
 
     ctx.font = `bold 48px "Georgia", serif`;
-    ctx.fillText(String(score), canvasW / 2, canvasH / 2 + 20);
+    ctx.fillText(String(score), cx, y);
+    y += 36;
 
+    if (isNewHigh) {
+      ctx.fillStyle = '#ffdd44';
+      ctx.font = `bold 20px "Georgia", serif`;
+      ctx.fillText('New High Score!', cx, y);
+      ctx.fillStyle = HUD_TEXT;
+    }
+    y += 40;
+
+    // High scores table
+    if (topScores.length > 0) {
+      ctx.font = `bold 18px "Georgia", serif`;
+      ctx.fillStyle = '#a0c8a0';
+      ctx.fillText('High Scores', cx, y);
+      y += 28;
+
+      ctx.font = `18px "Georgia", serif`;
+      for (let i = 0; i < topScores.length; i++) {
+        const isCurrent = topScores[i] === highScore && isNewHigh && topScores.indexOf(highScore) === i;
+        ctx.fillStyle = isCurrent ? '#ffdd44' : HUD_TEXT;
+        ctx.fillText(`${i + 1}.  ${topScores[i]}`, cx, y);
+        y += 24;
+      }
+    }
+
+    y = canvasH * 0.85;
+    ctx.fillStyle = HUD_TEXT;
     ctx.font = `20px "Georgia", serif`;
-    ctx.fillText('Tap to Play Again', canvasW / 2, canvasH / 2 + 70);
+    ctx.fillText('Tap to Play Again', cx, y);
   }
 
   // ── Helpers ───────────────────────────────────────────────

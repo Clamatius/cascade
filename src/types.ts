@@ -76,10 +76,10 @@ export interface LayoutMetrics {
 }
 
 export function computeLayout(canvasW: number, canvasH: number): LayoutMetrics {
-  // Board should fit within ~90% of width, leave room for HUD at top
-  const hudHeight = 60;
+  // Reserve space for HUD (scales with canvas)
+  const hudHeight = Math.max(canvasH * 0.07, 50);
   const availW = canvasW * 0.92;
-  const availH = canvasH - hudHeight - 20;
+  const availH = canvasH - hudHeight - canvasH * 0.02;
 
   // Row 0 has 7 tiles. Total width = 7 * tileSize + 6 * pad.
   // We want pad ≈ tileSize * 0.1
