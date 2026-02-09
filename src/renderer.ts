@@ -8,6 +8,7 @@ import {
 
 const BOARD_BG     = '#2c5f2d';
 const SLOT_BG      = '#1e4620';
+const HAND_SLOT_BG = '#244f26';
 const SLOT_BORDER  = '#173518';
 const TILE_FACE    = '#f5e6c8';
 const TILE_LIGHT   = '#faf3e3';
@@ -41,13 +42,15 @@ export class Renderer {
   }
 
   drawSlots(): void {
-    const { tileSize } = this.layout;
+    const { tileSize, tilePad } = this.layout;
     const r = tileSize * 0.08;
 
     for (let row = 0; row < NUM_ROWS; row++) {
+      // Hand row (row 0) gets a slightly lighter slot shade
+      const isHand = row === 0;
       for (let col = 0; col < ROW_WIDTHS[row]; col++) {
         const { x, y } = gridToPixel({ row, col }, this.layout);
-        this.ctx.fillStyle = SLOT_BG;
+        this.ctx.fillStyle = isHand ? HAND_SLOT_BG : SLOT_BG;
         this.ctx.strokeStyle = SLOT_BORDER;
         this.ctx.lineWidth = 1;
         this.roundRect(x, y, tileSize, tileSize, r);
@@ -55,6 +58,22 @@ export class Renderer {
         this.ctx.stroke();
       }
     }
+
+    // Hand separator: dashed line between row 0 and row 1
+    const row0Start = gridToPixel({ row: 0, col: 0 }, this.layout);
+    const row0End = gridToPixel({ row: 0, col: ROW_WIDTHS[0] - 1 }, this.layout);
+    const sepY = row0Start.y + tileSize + tilePad * 0.45;
+
+    this.ctx.save();
+    this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+    this.ctx.lineWidth = 1;
+    this.ctx.setLineDash([tileSize * 0.15, tileSize * 0.1]);
+    this.ctx.beginPath();
+    this.ctx.moveTo(row0Start.x, sepY);
+    this.ctx.lineTo(row0End.x + tileSize, sepY);
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+    this.ctx.restore();
   }
 
   drawTile(tile: Tile, alpha: number = 1): void {
@@ -140,6 +159,85 @@ export class Renderer {
       tileSize * 0.08
     );
     this.ctx.fill();
+  }
+
+  /** Draw the word text overlaid on a row during clearing phase */
+  drawWordOverlay(row: number, word: string, valid: boolean, progress: number): void {
+    const { tileSize } = this.layout;
+    const ctx = this.ctx;
+    const width = ROW_WIDTHS[row];
+    const startPos = gridToPixel({ row, col: 0 }, this.layout);
+    const endPos = gridToPixel({ row, col: width - 1 }, this.layout);
+    const centerX = (startPos.x + endPos.x + tileSize) / 2;
+    const centerY = startPos.y + tileSize / 2;
+
+    ctx.save();
+
+    if (valid) {
+      // Gold text with pulsing glow
+      const pulse = 0.6 + 0.4 * Math.sin(progress * Math.PI * 4);
+      const glowRadius = tileSize * 0.3 * pulse;
+
+      ctx.shadowColor = '#ffdd44';
+      ctx.shadowBlur = glowRadius;
+      ctx.fillStyle = '#ffdd44';
+    } else {
+      // Dim red, no glow
+      ctx.globalAlpha = 0.5;
+      ctx.fillStyle = '#cc4444';
+    }
+
+    const fontSize = Math.min(tileSize * 0.45, 24);
+    ctx.font = `bold ${fontSize}px "Georgia", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(word, centerX, centerY);
+
+    ctx.restore();
+  }
+
+  /** White flash overlay for perfect board celebration */
+  drawPerfectFlash(progress: number): void {
+    if (progress >= 1) return;
+    const ctx = this.ctx;
+    const { canvasW, canvasH } = this.layout;
+
+    // Quick flash in, slow fade out
+    const alpha = progress < 0.15
+      ? progress / 0.15 * 0.6
+      : 0.6 * (1 - (progress - 0.15) / 0.85);
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.restore();
+  }
+
+  /** Floating "PERFECT BOARD!" text */
+  drawPerfectText(progress: number): void {
+    const ctx = this.ctx;
+    const { canvasW, canvasH } = this.layout;
+
+    const alpha = progress < 0.1
+      ? progress / 0.1
+      : progress > 0.8
+        ? (1 - progress) / 0.2
+        : 1;
+
+    const scale = 0.8 + 0.2 * Math.sin(progress * Math.PI * 3);
+    const y = canvasH * 0.38 - 20 * progress;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, alpha);
+    ctx.fillStyle = '#ffdd44';
+    ctx.font = `bold ${32 * scale}px "Georgia", serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#ff8800';
+    ctx.shadowBlur = 12;
+    ctx.fillText('PERFECT BOARD!', canvasW / 2, y);
+    ctx.restore();
   }
 
   highlightDropTarget(pos: GridPos): void {

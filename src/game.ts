@@ -9,7 +9,7 @@ import { Board } from './board';
 import { Renderer } from './renderer';
 import { Input } from './input';
 import { isWord, isDictionaryLoaded } from './dictionary';
-import { playTileClick, playScoreChime, resumeAudio } from './audio';
+import { playTileClick, playWordArpeggio, playBoardClear, playPerfectBoard, resumeAudio } from './audio';
 
 interface FloatingScore {
   x: number;
@@ -53,6 +53,9 @@ export class Game {
 
   // Clearing phase
   private clearResults: RowResult[] = [];
+  private clearStartTime = 0;
+  private isPerfectBoard = false;
+  private _clearProgress = -1;
 
   // Gravity
   private gravityRunning = false;
@@ -418,6 +421,8 @@ export class Game {
     this.stopTimers();
 
     this.clearResults = [];
+    this.clearStartTime = performance.now();
+    this.isPerfectBoard = false;
     let roundScore = 0;
 
     for (let r = 0; r < NUM_ROWS; r++) {
@@ -442,10 +447,41 @@ export class Game {
       }
     }
 
+    // Audio feedback - arpeggios for each valid word, staggered
+    const validResults = this.clearResults.filter(r => r.valid);
+    const allValid = this.clearResults.length > 0 && validResults.length === this.clearResults.length;
+    this.isPerfectBoard = allValid;
+
+    // Perfect board gets 2x bonus
+    if (allValid && roundScore > 0) {
+      roundScore *= 2;
+    }
     this.score += roundScore;
-    if (roundScore > 0) playScoreChime();
+
+    if (allValid) {
+      // PERFECT BOARD - the Peggle moment
+      playPerfectBoard();
+      this.floatingScores.push({
+        x: this.layout.canvasW / 2,
+        y: this.layout.canvasH * 0.55,
+        text: `2x BONUS! +${roundScore}`,
+        startTime: performance.now() + 400,
+        duration: 2000,
+      });
+    } else {
+      // Play word arpeggios for each valid word, staggered by 200ms
+      validResults.forEach((result, idx) => {
+        setTimeout(() => playWordArpeggio(result.word.length), idx * 200);
+      });
+    }
+
+    // Board clear whoosh at end of display
+    if (roundScore > 0) {
+      setTimeout(() => playBoardClear(), CLEAR_DISPLAY_MS - 200);
+    }
 
     // After display duration, clear board and resume
+    const clearDelay = allValid ? CLEAR_DISPLAY_MS + 800 : CLEAR_DISPLAY_MS;
     setTimeout(() => {
       this.board.clearAll();
       this.clearResults = [];
@@ -458,7 +494,7 @@ export class Game {
       } else {
         this.endRound();
       }
-    }, CLEAR_DISPLAY_MS);
+    }, clearDelay);
   }
 
   // ── Render loop ───────────────────────────────────────────
@@ -491,11 +527,19 @@ export class Game {
       tile.visualY += (target.y - tile.visualY) * lerpSpeed;
     }
 
-    // Draw clearing highlights
+    // Draw clearing highlights and word overlays
     if (this.phase === 'clearing') {
+      const clearElapsed = now - this.clearStartTime;
+      const clearDuration = this.isPerfectBoard ? CLEAR_DISPLAY_MS + 800 : CLEAR_DISPLAY_MS;
+      const clearProgress = Math.min(clearElapsed / clearDuration, 1);
+
       for (const result of this.clearResults) {
         this.renderer.highlightRow(result.row, result.valid);
       }
+
+      this._clearProgress = clearProgress;
+    } else {
+      this._clearProgress = -1;
     }
 
     // Draw drop target
@@ -506,6 +550,23 @@ export class Game {
 
     // Draw tiles on board
     this.renderer.drawTiles(tiles);
+
+    // Word overlays on top of tiles during clearing
+    if (this._clearProgress >= 0 && this.clearResults.length > 0) {
+      for (const result of this.clearResults) {
+        this.renderer.drawWordOverlay(result.row, result.word, result.valid, this._clearProgress);
+      }
+
+      // Perfect board celebration effects
+      if (this.isPerfectBoard) {
+        // Flash in first 600ms
+        if (this._clearProgress < 0.3) {
+          this.renderer.drawPerfectFlash(this._clearProgress / 0.3);
+        }
+        // Floating text for most of the duration
+        this.renderer.drawPerfectText(this._clearProgress);
+      }
+    }
 
     // Draw dragged tile on top (if removed from board, it won't be in allTiles)
     const drag = this.input.getDrag();
