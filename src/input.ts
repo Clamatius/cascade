@@ -16,9 +16,16 @@ export class Input {
   private dropTarget: GridPos | null = null;
   private enabled: boolean = true;
 
-  /** Called when a tile is dropped at a new valid position */
+  // Click vs drag detection
+  private pointerStart: { x: number; y: number } | null = null;
+  private isDragging = false;
+  private readonly DRAG_THRESHOLD = 10; // CSS pixels
+
+  /** Called when a hand tile (row 0) is tapped (not dragged) */
+  onHandClick: ((pos: GridPos) => void) | null = null;
+  /** Called when a tile is dragged and dropped to a new position */
   onDrop: ((tile: Tile, from: GridPos, to: GridPos) => void) | null = null;
-  /** Called on any tap (for start screen etc) */
+  /** Called on any tap on empty space / non-interactive area */
   onTap: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -73,13 +80,26 @@ export class Input {
     }
 
     const tile = this.board.get(gridPos);
-    if (!tile || !tile.settled) {
+    if (!tile) {
       this.onTap?.();
       return;
     }
 
-    // Start dragging
+    // Draggability check:
+    // Hand tiles (row 0) are always interactive (click or drag)
+    // Non-hand tiles must be settled and uncovered
+    const isHand = gridPos.row === 0;
+    if (!isHand) {
+      if (!tile.settled || this.board.isCovered(gridPos)) {
+        return; // can't interact with covered or falling tiles
+      }
+    }
+
     this.canvas.setPointerCapture(e.pointerId);
+    this.pointerStart = { x, y };
+    this.isDragging = false;
+
+    // Prepare drag state but don't remove tile yet (wait for threshold)
     const tilePixel = gridToPixel(gridPos, this.layout);
     this.drag = {
       tile,
@@ -87,24 +107,28 @@ export class Input {
       offsetX: x - tilePixel.x,
       offsetY: y - tilePixel.y,
     };
-
-    // Remove from board during drag
-    this.board.remove(tile);
-    tile.settled = false;
-
-    // Update visual position to follow pointer
-    tile.visualX = x - this.drag.offsetX;
-    tile.visualY = y - this.drag.offsetY;
   }
 
   private onPointerMove(e: PointerEvent): void {
-    if (!this.drag) return;
+    if (!this.drag || !this.pointerStart) return;
 
     const { x, y } = this.getCanvasCoords(e);
+
+    if (!this.isDragging) {
+      const dpr = window.devicePixelRatio || 1;
+      const dx = x - this.pointerStart.x;
+      const dy = y - this.pointerStart.y;
+      if (Math.hypot(dx, dy) < this.DRAG_THRESHOLD * dpr) {
+        return; // not yet a drag
+      }
+      // Crossed threshold - start actual drag
+      this.isDragging = true;
+      this.board.remove(this.drag.tile);
+      this.drag.tile.settled = false;
+    }
+
     this.drag.tile.visualX = x - this.drag.offsetX;
     this.drag.tile.visualY = y - this.drag.offsetY;
-
-    // Find nearest empty grid position for drop target
     this.dropTarget = this.findNearestEmpty(x, y);
   }
 
@@ -114,22 +138,57 @@ export class Input {
     const tile = this.drag.tile;
     const origin = this.drag.originPos;
 
-    if (this.dropTarget && !this.posEqual(this.dropTarget, origin)) {
-      // Valid drop at new position
+    if (!this.isDragging) {
+      // It was a tap, not a drag
+      this.drag = null;
+      this.dropTarget = null;
+      this.pointerStart = null;
+  
+      if (origin.row === 0) {
+        // Tap on hand tile → drop it
+        this.onHandClick?.(origin);
+      }
+      // Tap on non-hand tile does nothing
+      return;
+    }
+
+    // It was a drag - tile is already removed from board
+    if (this.dropTarget) {
+      // Valid drop
       this.board.place(tile, this.dropTarget);
-      tile.settled = false; // will fall from here
+      tile.settled = false;
       this.onDrop?.(tile, origin, this.dropTarget);
     } else {
-      // Return to original position
-      this.board.place(tile, origin);
-      tile.settled = true;
-      const px = gridToPixel(origin, this.layout);
-      tile.visualX = px.x;
-      tile.visualY = px.y;
+      // Invalid drop - return to origin if still empty
+      if (this.board.isEmpty(origin)) {
+        this.board.place(tile, origin);
+        tile.settled = origin.row === 0; // hand tiles are settled, others will need gravity
+        const px = gridToPixel(origin, this.layout);
+        tile.visualX = px.x;
+        tile.visualY = px.y;
+      } else {
+        // Origin now occupied (gravity filled it during drag) - find nearest empty
+        const alt = this.findNearestEmpty(tile.visualX, tile.visualY);
+        if (alt) {
+          this.board.place(tile, alt);
+          tile.settled = false;
+          this.onDrop?.(tile, origin, alt);
+        } else {
+          // Nowhere to go - force back to origin (shouldn't happen in practice)
+          this.board.set(origin, tile);
+          tile.pos = { ...origin };
+          tile.settled = true;
+          const px = gridToPixel(origin, this.layout);
+          tile.visualX = px.x;
+          tile.visualY = px.y;
+        }
+      }
     }
 
     this.drag = null;
     this.dropTarget = null;
+    this.pointerStart = null;
+    this.isDragging = false;
   }
 
   private findNearestEmpty(px: number, py: number): GridPos | null {
@@ -154,9 +213,5 @@ export class Input {
     }
 
     return best;
-  }
-
-  private posEqual(a: GridPos, b: GridPos): boolean {
-    return a.row === b.row && a.col === b.col;
   }
 }

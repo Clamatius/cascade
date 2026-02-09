@@ -1,7 +1,7 @@
 import {
   type Tile, type GridPos,
   ROW_WIDTHS, NUM_ROWS, TOTAL_POSITIONS,
-  fallTargets, SCRABBLE_VALUES, LENGTH_MULTIPLIERS,
+  SCRABBLE_VALUES, LENGTH_MULTIPLIERS,
 } from './types';
 
 export class Board {
@@ -63,50 +63,17 @@ export class Board {
   }
 
   /**
-   * Apply gravity one step. Process bottom-to-top.
-   * Returns true if any tile moved (meaning more gravity steps needed).
+   * Check if a tile is covered by tiles in the row above.
+   * Tile at (r, c) is covered if (r-1, c) or (r-1, c+1) has a tile.
+   * Hand tiles (row 0) are never covered.
    */
-  applyGravity(): boolean {
-    let anyMoved = false;
-
-    // Bottom-to-top, skip last row (can't fall further)
-    for (let r = NUM_ROWS - 2; r >= 0; r--) {
-      for (let c = 0; c < ROW_WIDTHS[r]; c++) {
-        const tile = this.grid[r][c];
-        if (!tile) continue;
-
-        const targets = fallTargets(tile.pos);
-        let moved = false;
-
-        for (const target of targets) {
-          if (this.isEmpty(target)) {
-            this.set(tile.pos, null);
-            tile.pos = { ...target };
-            tile.settled = false;
-            this.set(target, tile);
-            moved = true;
-            anyMoved = true;
-            break;
-          }
-        }
-
-        if (!moved && !tile.settled) {
-          // Check if tile truly can't fall (all targets occupied or at bottom)
-          const canFall = targets.some(t => this.isEmpty(t));
-          if (!canFall) {
-            tile.settled = true;
-          }
-        }
-      }
-    }
-
-    // Bottom row tiles are always settled if present
-    for (let c = 0; c < ROW_WIDTHS[NUM_ROWS - 1]; c++) {
-      const tile = this.grid[NUM_ROWS - 1][c];
-      if (tile) tile.settled = true;
-    }
-
-    return anyMoved;
+  isCovered(pos: GridPos): boolean {
+    if (pos.row === 0) return false;
+    const aboveRow = pos.row - 1;
+    const aboveWidth = ROW_WIDTHS[aboveRow];
+    if (pos.col < aboveWidth && this.grid[aboveRow][pos.col] !== null) return true;
+    if (pos.col + 1 < aboveWidth && this.grid[aboveRow][pos.col + 1] !== null) return true;
+    return false;
   }
 
   /** Read a row left-to-right as a word string */
@@ -118,14 +85,6 @@ export class Board {
       word += tile.letter;
     }
     return word.toUpperCase();
-  }
-
-  /** Check if a specific row is completely filled */
-  isRowFull(row: number): boolean {
-    for (let c = 0; c < ROW_WIDTHS[row]; c++) {
-      if (this.grid[row][c] === null) return false;
-    }
-    return true;
   }
 
   /** Score a word: sum of scrabble values × length multiplier */

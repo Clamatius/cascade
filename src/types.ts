@@ -15,8 +15,6 @@ export interface Tile {
   visualY: number;
 }
 
-export type TileState = 'falling' | 'settled' | 'dragging';
-
 export type GamePhase = 'start' | 'playing' | 'clearing' | 'roundEnd';
 
 // ── Board constants ───────────────────────────────────────────
@@ -27,8 +25,9 @@ export const TOTAL_POSITIONS = 27; // sum of ROW_WIDTHS
 
 // ── Timing ────────────────────────────────────────────────────
 
-export const TICK_MS = 300;          // gravity tick
-export const SPAWN_MS = 1000;        // new letter interval
+export const STAGGER_MS = 120;       // delay between individual tile movements in a gravity wave
+export const WAVE_INTERVAL_MS = 500; // target interval between gravity wave starts
+export const HAND_REFILL_MS = 400;   // delay before empty hand slot gets a new tile
 export const ROUND_DURATION_S = 120; // 2 minutes
 export const CLEAR_DISPLAY_MS = 1200; // highlight duration before clear
 
