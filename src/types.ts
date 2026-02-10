@@ -13,6 +13,8 @@ export interface Tile {
   // visual interpolation
   visualX: number;
   visualY: number;
+  // per-tile gravity: timestamp when tile should next try to fall one row
+  nextFallAt?: number;
 }
 
 export type GamePhase = 'start' | 'playing' | 'clearing' | 'roundEnd';
@@ -25,8 +27,7 @@ export const TOTAL_POSITIONS = 27; // sum of ROW_WIDTHS
 
 // ── Timing ────────────────────────────────────────────────────
 
-export const STAGGER_MS = 120;       // delay between individual tile movements in a gravity wave
-export const WAVE_INTERVAL_MS = 500; // target interval between gravity wave starts
+export const FALL_TICK_MS = 350;     // per-tile: ms between each one-row fall step
 export const HAND_REFILL_MS = 400;   // delay before empty hand slot gets a new tile
 export const ROUND_DURATION_S = 120; // 2 minutes
 export const CLEAR_DISPLAY_MS = 1200; // highlight duration before clear

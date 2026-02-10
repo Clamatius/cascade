@@ -27,6 +27,10 @@ export class Input {
   onDrop: ((tile: Tile, from: GridPos, to: GridPos) => void) | null = null;
   /** Called on any tap on empty space / non-interactive area */
   onTap: (() => void) | null = null;
+  /** Hit area check for mute button - returns true if point is inside */
+  muteHitTest: ((x: number, y: number) => boolean) | null = null;
+  /** Called when mute button is tapped */
+  onMuteClick: (() => void) | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -66,12 +70,19 @@ export class Input {
   }
 
   private onPointerDown(e: PointerEvent): void {
+    // Mute button is always clickable regardless of game state
+    const coords = this.getCanvasCoords(e);
+    if (this.muteHitTest?.(coords.x, coords.y)) {
+      this.onMuteClick?.();
+      return;
+    }
+
     if (!this.enabled) {
       this.onTap?.();
       return;
     }
 
-    const { x, y } = this.getCanvasCoords(e);
+    const { x, y } = coords;
     const gridPos = pixelToGrid(x, y, this.layout);
 
     if (!gridPos) {

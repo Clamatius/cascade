@@ -1,10 +1,19 @@
 let audioCtx: AudioContext | null = null;
+let muted = localStorage.getItem('cascade-muted') === '1';
 
 function getCtx(): AudioContext {
   if (!audioCtx) {
     audioCtx = new AudioContext();
   }
   return audioCtx;
+}
+
+export function isMuted(): boolean { return muted; }
+
+export function toggleMute(): boolean {
+  muted = !muted;
+  localStorage.setItem('cascade-muted', muted ? '1' : '0');
+  return muted;
 }
 
 /** Resume audio context (must be called from user gesture) */
@@ -17,6 +26,7 @@ export function resumeAudio(): void {
 
 /** Short synthesized tile-click sound */
 export function playTileClick(): void {
+  if (muted) return;
   const ctx = getCtx();
   if (ctx.state !== 'running') return;
 
@@ -67,6 +77,7 @@ const ARPEGGIO_NOTES = [
  * Longer words = more notes = more satisfying.
  */
 export function playWordArpeggio(wordLength: number): void {
+  if (muted) return;
   const ctx = getCtx();
   if (ctx.state !== 'running') return;
 
@@ -106,6 +117,7 @@ export function playWordArpeggio(wordLength: number): void {
 
 /** Board clear whoosh - low filtered noise sweep */
 export function playBoardClear(): void {
+  if (muted) return;
   const ctx = getCtx();
   if (ctx.state !== 'running') return;
 
@@ -143,6 +155,7 @@ export function playBoardClear(): void {
  * The Peggle moment.
  */
 export function playPerfectBoard(): void {
+  if (muted) return;
   const ctx = getCtx();
   if (ctx.state !== 'running') return;
 

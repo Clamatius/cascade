@@ -1,6 +1,6 @@
 import {
   type Tile, type GamePhase, type GridPos, type LayoutMetrics,
-  STAGGER_MS, WAVE_INTERVAL_MS, HAND_REFILL_MS,
+  FALL_TICK_MS, HAND_REFILL_MS,
   ROUND_DURATION_S, CLEAR_DISPLAY_MS,
   NUM_ROWS, ROW_WIDTHS,
   PRNG, gridToPixel,
@@ -9,7 +9,7 @@ import { Board } from './board';
 import { Renderer } from './renderer';
 import { Input } from './input';
 import { isWord, isDictionaryLoaded } from './dictionary';
-import { playTileClick, playWordArpeggio, playBoardClear, playPerfectBoard, resumeAudio } from './audio';
+import { playTileClick, playWordArpeggio, playBoardClear, playPerfectBoard, resumeAudio, isMuted, toggleMute } from './audio';
 
 interface FloatingScore {
   x: number;
@@ -57,9 +57,6 @@ export class Game {
   private isPerfectBoard = false;
   private _clearProgress = -1;
 
-  // Gravity
-  private gravityRunning = false;
-  private gravityTimers: number[] = [];
 
   // Hand refill timers: col → timer id
   private refillTimers = new Map<number, number>();
@@ -87,13 +84,22 @@ export class Game {
       this.dropFromHand(pos);
     };
 
-    this.input.onDrop = (_tile, from, to) => {
+    this.input.onDrop = (tile, from, to) => {
       if (from.row === 0 && to.row > 0) {
         this.scheduleHandRefill(from.col);
       }
-      if (to.row > 0) {
-        this.triggerGravity();
+      if (to.row > 0 && to.row < NUM_ROWS - 1) {
+        tile.nextFallAt = performance.now() + FALL_TICK_MS;
       }
+    };
+
+    this.input.muteHitTest = (x, y) => {
+      const hit = this.renderer.getMuteHitArea();
+      return x >= hit.x && x <= hit.x + hit.w && y >= hit.y && y <= hit.y + hit.h;
+    };
+
+    this.input.onMuteClick = () => {
+      toggleMute();
     };
   }
 
@@ -133,8 +139,6 @@ export class Game {
     this.timeLeft = ROUND_DURATION_S;
     this.floatingScores = [];
     this.clearResults = [];
-    this.gravityRunning = false;
-    this.gravityTimers = [];
     this.refillTimers.forEach(t => clearTimeout(t));
     this.refillTimers.clear();
     this.prng = new PRNG(Date.now());
@@ -199,8 +203,6 @@ export class Game {
   private stopTimers(): void {
     if (this.roundTimer !== null) { clearInterval(this.roundTimer); this.roundTimer = null; }
     if (this.cascadeTimer !== null) { clearTimeout(this.cascadeTimer); this.cascadeTimer = null; }
-    for (const t of this.gravityTimers) clearTimeout(t);
-    this.gravityTimers = [];
     this.refillTimers.forEach(t => clearTimeout(t));
     this.refillTimers.clear();
   }
@@ -259,14 +261,12 @@ export class Game {
     // Move tile from hand to first fall position
     this.board.remove(tile);
     tile.settled = false;
+    tile.nextFallAt = performance.now() + FALL_TICK_MS;
     this.board.place(tile, target);
     playTileClick();
 
     // Schedule hand refill
     this.scheduleHandRefill(pos.col);
-
-    // Trigger gravity to continue the fall
-    this.triggerGravity();
   }
 
   private findLeftmostEmpty(): GridPos | null {
@@ -303,110 +303,63 @@ export class Game {
     this.refillTimers.set(col, timer);
   }
 
-  // ── Staggered gravity ─────────────────────────────────────
+  // ── Per-tile gravity (called each frame) ─────────────────
 
-  private triggerGravity(): void {
-    if (this.gravityRunning) return;
-    this.gravityRunning = true;
-    this.runGravityWave();
-  }
+  private processGravity(now: number): void {
+    if (this.phase !== 'playing') return;
 
-  private runGravityWave(): void {
-    if (this.phase !== 'playing') {
-      this.gravityRunning = false;
-      return;
-    }
+    let anySettled = false;
 
-    // Collect tiles that might fall (skip row 0 = hand, skip last row = bottom)
-    // Bottom-to-top so lower tiles move first, left-to-right for stagger sound
-    const fallable: { tile: Tile; from: GridPos }[] = [];
-
+    // Bottom-to-top so lower tiles move first, freeing space
     for (let r = NUM_ROWS - 2; r >= 1; r--) {
       for (let c = 0; c < ROW_WIDTHS[r]; c++) {
         const tile = this.board.grid[r][c];
-        if (!tile) continue;
-        // Pre-check: any empty in next row?
-        if (this.board.emptyInRow(r + 1).length > 0) {
-          fallable.push({ tile, from: { ...tile.pos } });
-        }
-      }
-    }
+        if (!tile || tile.pos.row === 0) continue;
 
-    // Sort by column for left-to-right stagger, bottom-first within column
-    fallable.sort((a, b) => a.from.col - b.from.col || b.from.row - a.from.row);
-
-    if (fallable.length === 0) {
-      this.gravityRunning = false;
-      this.onGravitySettled();
-      return;
-    }
-
-    // Execute with stagger - compute actual target at execution time
-    // so earlier moves in this wave affect later ones
-    let i = 0;
-    let anyMoved = false;
-    const waveStartTime = performance.now();
-
-    const executeNext = () => {
-      while (i < fallable.length) {
-        const { tile, from } = fallable[i];
-        i++;
-
-        // Re-validate: tile still at 'from'
-        if (this.board.get(from) !== tile) continue;
-
-        // Find leftmost empty in next row (computed NOW, after prior moves)
-        const nextRow = from.row + 1;
+        const nextRow = r + 1;
         const emptyCols = this.board.emptyInRow(nextRow);
-        if (emptyCols.length === 0) continue;
 
-        const to: GridPos = { row: nextRow, col: emptyCols[0] };
-        this.board.set(from, null);
-        this.board.place(tile, to);
-        tile.settled = false;
-        anyMoved = true;
-        playTileClick();
-
-        if (i < fallable.length) {
-          const t = window.setTimeout(executeNext, STAGGER_MS);
-          this.gravityTimers.push(t);
-        } else {
-          // Wave done - if anything moved, schedule another wave
-          const elapsed = performance.now() - waveStartTime;
-          const delay = Math.max(WAVE_INTERVAL_MS - elapsed, 100);
-          const t = window.setTimeout(() => this.runGravityWave(), delay);
-          this.gravityTimers.push(t);
+        if (emptyCols.length === 0) {
+          // Can't fall - settle
+          if (!tile.settled) {
+            tile.settled = true;
+            tile.nextFallAt = undefined;
+            anySettled = true;
+          }
+          continue;
         }
-        return;
-      }
 
-      // No valid moves executed in this pass
-      if (!anyMoved) {
-        this.gravityRunning = false;
-        this.onGravitySettled();
-      } else {
-        // Some moved but remaining were invalid - schedule next wave
-        const elapsed = performance.now() - waveStartTime;
-        const delay = Math.max(WAVE_INTERVAL_MS - elapsed, 100);
-        const t = window.setTimeout(() => this.runGravityWave(), delay);
-        this.gravityTimers.push(t);
-      }
-    };
+        // Space below exists - start fall cadence if not already ticking
+        if (tile.nextFallAt === undefined) {
+          tile.nextFallAt = now + FALL_TICK_MS;
+          tile.settled = false;
+          continue;
+        }
 
-    executeNext();
-  }
+        // Not yet time to fall
+        if (now < tile.nextFallAt) continue;
 
-  private onGravitySettled(): void {
-    // Mark all non-hand tiles as settled
-    for (let r = 1; r < NUM_ROWS; r++) {
-      for (let c = 0; c < ROW_WIDTHS[r]; c++) {
-        const tile = this.board.grid[r][c];
-        if (tile) tile.settled = true;
+        // Time to fall one row
+        const to: GridPos = { row: nextRow, col: emptyCols[0] };
+        this.board.set(tile.pos, null);
+        this.board.place(tile, to);
+        tile.nextFallAt = now + FALL_TICK_MS;
+        playTileClick();
       }
     }
 
-    // Check if board is full
-    if (this.board.isFull()) {
+    // Settle bottom-row tiles
+    for (let c = 0; c < ROW_WIDTHS[NUM_ROWS - 1]; c++) {
+      const tile = this.board.grid[NUM_ROWS - 1][c];
+      if (tile && !tile.settled) {
+        tile.settled = true;
+        tile.nextFallAt = undefined;
+        anySettled = true;
+      }
+    }
+
+    // Check for board full after any settle
+    if (anySettled && this.board.isFull()) {
       this.evaluateBoard();
     }
   }
@@ -512,9 +465,12 @@ export class Game {
     this.renderer.clear();
 
     if (this.phase === 'start') {
-      this.renderer.drawStartScreen();
+      this.renderer.drawStartScreen(isMuted());
       return;
     }
+
+    // Per-tile gravity: move tiles whose fall timer has elapsed
+    this.processGravity(now);
 
     this.renderer.drawSlots();
 
@@ -575,7 +531,7 @@ export class Game {
     }
 
     // HUD
-    this.renderer.drawHUD(this.score, this.timeLeft, this.phase, this.bestScore);
+    this.renderer.drawHUD(this.score, this.timeLeft, this.phase, this.bestScore, isMuted());
 
     // Floating scores
     this.floatingScores = this.floatingScores.filter(fs => {

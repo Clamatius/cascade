@@ -249,7 +249,7 @@ export class Renderer {
     this.ctx.fill();
   }
 
-  drawHUD(score: number, timeLeft: number, _phase: string, highScore: number = 0): void {
+  drawHUD(score: number, timeLeft: number, _phase: string, highScore: number = 0, muted: boolean = false): void {
     const ctx = this.ctx;
     const { canvasW, boardY } = this.layout;
     const fontSize = Math.max(boardY * 0.35, 14);
@@ -270,14 +270,72 @@ export class Renderer {
     ctx.textAlign = 'center';
     ctx.fillText(String(score), canvasW / 2, midY);
 
-    // High score - right
+    // High score - right (shifted left to make room for mute icon)
     if (highScore > 0) {
       const smallFont = Math.max(fontSize * 0.7, 11);
       ctx.font = `${smallFont}px "Georgia", serif`;
       ctx.textAlign = 'right';
       ctx.fillStyle = '#a0c8a0';
-      ctx.fillText(`Best: ${highScore}`, canvasW - 10, midY);
+      ctx.fillText(`Best: ${highScore}`, canvasW - 30, midY);
     }
+
+    // Mute icon - top-right corner
+    this.drawMuteIcon(canvasW - 16, midY, Math.max(boardY * 0.25, 8), muted);
+  }
+
+  /** Draw a speaker icon; returns nothing (hit test is in Game) */
+  private drawMuteIcon(cx: number, cy: number, size: number, muted: boolean): void {
+    const ctx = this.ctx;
+    const s = size;
+
+    ctx.save();
+    ctx.fillStyle = muted ? '#886666' : HUD_TEXT;
+    ctx.strokeStyle = muted ? '#886666' : HUD_TEXT;
+    ctx.lineWidth = Math.max(1, s * 0.12);
+
+    // Speaker body (small rectangle + triangle)
+    ctx.beginPath();
+    // Rectangle part
+    ctx.rect(cx - s * 0.5, cy - s * 0.25, s * 0.3, s * 0.5);
+    ctx.fill();
+    // Triangle cone
+    ctx.beginPath();
+    ctx.moveTo(cx - s * 0.2, cy - s * 0.25);
+    ctx.lineTo(cx + s * 0.2, cy - s * 0.55);
+    ctx.lineTo(cx + s * 0.2, cy + s * 0.55);
+    ctx.lineTo(cx - s * 0.2, cy + s * 0.25);
+    ctx.closePath();
+    ctx.fill();
+
+    if (muted) {
+      // X through speaker
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.35, cy - s * 0.3);
+      ctx.lineTo(cx + s * 0.75, cy + s * 0.3);
+      ctx.moveTo(cx + s * 0.75, cy - s * 0.3);
+      ctx.lineTo(cx + s * 0.35, cy + s * 0.3);
+      ctx.stroke();
+    } else {
+      // Sound waves (two arcs)
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.2, cy, s * 0.35, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx + s * 0.2, cy, s * 0.6, -Math.PI * 0.35, Math.PI * 0.35);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  /** Get the mute button hit area for click detection */
+  getMuteHitArea(): { x: number; y: number; w: number; h: number } {
+    const { canvasW, boardY } = this.layout;
+    const size = Math.max(boardY * 0.25, 8);
+    const cx = canvasW - 16;
+    const cy = boardY * 0.5;
+    // Generous hit area
+    return { x: cx - size, y: cy - size, w: size * 2.5, h: size * 2 };
   }
 
   drawFloatingScore(x: number, y: number, text: string, progress: number): void {
@@ -294,9 +352,9 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawStartScreen(): void {
+  drawStartScreen(muted: boolean = false): void {
     const ctx = this.ctx;
-    const { canvasW, canvasH } = this.layout;
+    const { canvasW, canvasH, boardY } = this.layout;
 
     this.clear();
     this.drawSlots();
@@ -309,6 +367,9 @@ export class Renderer {
 
     ctx.font = `20px "Georgia", serif`;
     ctx.fillText('Tap to Start', canvasW / 2, canvasH / 2 + 20);
+
+    // Mute icon on start screen too
+    this.drawMuteIcon(canvasW - 16, boardY * 0.5, Math.max(boardY * 0.25, 8), muted);
   }
 
   drawRoundEnd(score: number, highScore: number, isNewHigh: boolean, topScores: number[]): void {
