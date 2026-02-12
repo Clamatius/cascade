@@ -15,6 +15,9 @@ export interface Tile {
   visualY: number;
   // per-tile gravity: timestamp when tile should next try to fall one row
   nextFallAt?: number;
+  // animation timestamps
+  settledAt?: number;    // when tile first settled (for bounce)
+  spawnedAt?: number;    // when tile was created (for scale-in)
 }
 
 export type GamePhase = 'start' | 'playing' | 'clearing' | 'roundEnd';
@@ -31,6 +34,9 @@ export const FALL_TICK_MS = 350;     // per-tile: ms between each one-row fall s
 export const HAND_REFILL_MS = 400;   // delay before empty hand slot gets a new tile
 export const ROUND_DURATION_S = 120; // 2 minutes
 export const CLEAR_DISPLAY_MS = 1200; // highlight duration before clear
+export const BOUNCE_DURATION_MS = 200; // elastic settle bounce duration
+export const BOUNCE_AMPLITUDE = 0.06;  // bounce overshoot as fraction of tileSize
+export const SPAWN_SCALE_MS = 150;     // hand tile scale-in duration
 
 // ── Scoring ───────────────────────────────────────────────────
 

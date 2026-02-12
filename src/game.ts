@@ -4,6 +4,7 @@ import {
   ROUND_DURATION_S, CLEAR_DISPLAY_MS,
   NUM_ROWS, ROW_WIDTHS,
   PRNG, gridToPixel,
+  BOUNCE_DURATION_MS, BOUNCE_AMPLITUDE,
 } from './types';
 import { Board } from './board';
 import { Renderer } from './renderer';
@@ -292,6 +293,7 @@ export class Game {
       const letter = this.prng.nextLetter();
       const tile = this.createTile(letter, { row: 0, col });
       tile.settled = true;
+      tile.spawnedAt = performance.now();
       this.board.place(tile, { row: 0, col });
 
       // Check if board is now full (hand tile filled the last spot)
@@ -323,6 +325,7 @@ export class Game {
           // Can't fall - settle
           if (!tile.settled) {
             tile.settled = true;
+            tile.settledAt = now;
             tile.nextFallAt = undefined;
             anySettled = true;
           }
@@ -353,6 +356,7 @@ export class Game {
       const tile = this.board.grid[NUM_ROWS - 1][c];
       if (tile && !tile.settled) {
         tile.settled = true;
+        tile.settledAt = now;
         tile.nextFallAt = undefined;
         anySettled = true;
       }
@@ -465,7 +469,7 @@ export class Game {
     this.renderer.clear();
 
     if (this.phase === 'start') {
-      this.renderer.drawStartScreen(isMuted());
+      this.renderer.drawStartScreen(isMuted(), this.bestScore);
       return;
     }
 
@@ -481,6 +485,18 @@ export class Game {
       const lerpSpeed = 0.25;
       tile.visualX += (target.x - tile.visualX) * lerpSpeed;
       tile.visualY += (target.y - tile.visualY) * lerpSpeed;
+
+      // Settle bounce: damped overshoot on Y
+      if (tile.settledAt !== undefined) {
+        const elapsed = now - tile.settledAt;
+        if (elapsed < BOUNCE_DURATION_MS) {
+          const t = elapsed / BOUNCE_DURATION_MS;
+          const bounce = Math.sin(t * Math.PI) * (1 - t * 0.5);
+          tile.visualY += bounce * this.layout.tileSize * BOUNCE_AMPLITUDE;
+        } else {
+          tile.settledAt = undefined; // bounce done
+        }
+      }
     }
 
     // Draw clearing highlights and word overlays
@@ -505,7 +521,7 @@ export class Game {
     }
 
     // Draw tiles on board
-    this.renderer.drawTiles(tiles);
+    this.renderer.drawTiles(tiles, now);
 
     // Word overlays on top of tiles during clearing
     if (this._clearProgress >= 0 && this.clearResults.length > 0) {

@@ -1,7 +1,7 @@
 import {
   type LayoutMetrics, type Tile, type GridPos,
   ROW_WIDTHS, NUM_ROWS,
-  gridToPixel, SCRABBLE_VALUES,
+  gridToPixel, SCRABBLE_VALUES, SPAWN_SCALE_MS,
 } from './types';
 
 // ── Colors ────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ export class Renderer {
     this.ctx.restore();
   }
 
-  drawTile(tile: Tile, alpha: number = 1): void {
+  drawTile(tile: Tile, alpha: number = 1, now: number = performance.now()): void {
     const { tileSize } = this.layout;
     const x = tile.visualX;
     const y = tile.visualY;
@@ -86,6 +86,23 @@ export class Renderer {
 
     ctx.save();
     ctx.globalAlpha = alpha;
+
+    // Spawn scale-in animation for hand tiles
+    if (tile.spawnedAt !== undefined) {
+      const elapsed = now - tile.spawnedAt;
+      if (elapsed < SPAWN_SCALE_MS) {
+        const t = elapsed / SPAWN_SCALE_MS;
+        // Ease-out cubic
+        const scale = 1 - (1 - t) * (1 - t) * (1 - t);
+        const cx = x + s / 2;
+        const cy = y + s / 2;
+        ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
+        ctx.translate(-cx, -cy);
+      } else {
+        tile.spawnedAt = undefined; // animation done
+      }
+    }
 
     // Shadow
     ctx.fillStyle = TILE_SHADOW;
@@ -137,9 +154,9 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawTiles(tiles: Tile[]): void {
+  drawTiles(tiles: Tile[], now: number = performance.now()): void {
     for (const tile of tiles) {
-      this.drawTile(tile);
+      this.drawTile(tile, 1, now);
     }
   }
 
@@ -352,21 +369,47 @@ export class Renderer {
     ctx.restore();
   }
 
-  drawStartScreen(muted: boolean = false): void {
+  drawStartScreen(muted: boolean = false, highScore: number = 0): void {
     const ctx = this.ctx;
-    const { canvasW, canvasH, boardY } = this.layout;
+    const { canvasW, canvasH, boardY, tileSize } = this.layout;
 
     this.clear();
     this.drawSlots();
 
+    // Draw CASCADE as Scrabble tiles
+    const letters = ['C', 'A', 'S', 'C', 'A', 'D', 'E'];
+    const titleTileSize = Math.min(tileSize * 1.15, canvasW / 8.5);
+    const titlePad = titleTileSize * 0.08;
+    const totalW = letters.length * titleTileSize + (letters.length - 1) * titlePad;
+    const startX = (canvasW - totalW) / 2;
+    const titleY = canvasH / 2 - titleTileSize * 0.7;
+
+    for (let i = 0; i < letters.length; i++) {
+      const fakeTile: Tile = {
+        id: -1, letter: letters[i],
+        pos: { row: 0, col: 0 }, settled: true,
+        visualX: startX + i * (titleTileSize + titlePad),
+        visualY: titleY,
+      };
+      // Temporarily override tileSize for larger title tiles
+      const savedSize = this.layout.tileSize;
+      this.layout.tileSize = titleTileSize;
+      this.drawTile(fakeTile);
+      this.layout.tileSize = savedSize;
+    }
+
     ctx.fillStyle = HUD_TEXT;
-    ctx.font = `bold 36px "Georgia", serif`;
+    ctx.font = `20px "Georgia", serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('CASCADE', canvasW / 2, canvasH / 2 - 40);
+    ctx.fillText('Tap to Start', canvasW / 2, titleY + titleTileSize + 30);
 
-    ctx.font = `20px "Georgia", serif`;
-    ctx.fillText('Tap to Start', canvasW / 2, canvasH / 2 + 20);
+    // Show high score if exists
+    if (highScore > 0) {
+      ctx.fillStyle = '#a0c8a0';
+      ctx.font = `16px "Georgia", serif`;
+      ctx.fillText(`Best: ${highScore}`, canvasW / 2, titleY + titleTileSize + 58);
+    }
 
     // Mute icon on start screen too
     this.drawMuteIcon(canvasW - 16, boardY * 0.5, Math.max(boardY * 0.25, 8), muted);
