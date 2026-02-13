@@ -22,13 +22,19 @@ export function resumeAudio(): void {
   if (ctx.state === 'suspended') {
     ctx.resume();
   }
+  // Mobile unlock: play a silent buffer within the user gesture
+  const buf = ctx.createBuffer(1, 1, ctx.sampleRate);
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.connect(ctx.destination);
+  src.start();
 }
 
 /** Short synthesized tile-click sound */
 export function playTileClick(): void {
   if (muted) return;
   const ctx = getCtx();
-  if (ctx.state !== 'running') return;
+  if (ctx.state === 'suspended') ctx.resume();
 
   const now = ctx.currentTime;
 
@@ -79,7 +85,7 @@ const ARPEGGIO_NOTES = [
 export function playWordArpeggio(wordLength: number): void {
   if (muted) return;
   const ctx = getCtx();
-  if (ctx.state !== 'running') return;
+  if (ctx.state === 'suspended') ctx.resume();
 
   const now = ctx.currentTime;
   const noteCount = Math.min(Math.max(wordLength, 2), ARPEGGIO_NOTES.length);
@@ -119,7 +125,7 @@ export function playWordArpeggio(wordLength: number): void {
 export function playBoardClear(): void {
   if (muted) return;
   const ctx = getCtx();
-  if (ctx.state !== 'running') return;
+  if (ctx.state === 'suspended') ctx.resume();
 
   const now = ctx.currentTime;
   const duration = 0.5;
@@ -157,7 +163,7 @@ export function playBoardClear(): void {
 export function playPerfectBoard(): void {
   if (muted) return;
   const ctx = getCtx();
-  if (ctx.state !== 'running') return;
+  if (ctx.state === 'suspended') ctx.resume();
 
   const now = ctx.currentTime;
 
