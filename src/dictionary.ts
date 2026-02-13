@@ -5,7 +5,7 @@ export function loadDictionary(): Promise<void> {
   if (wordSet) return Promise.resolve();
   if (loading) return loading;
 
-  loading = fetch('/words.txt')
+  loading = fetch(`${import.meta.env.BASE_URL}words.txt`)
     .then(res => {
       if (!res.ok) throw new Error(`Failed to load dictionary: ${res.status}`);
       return res.text();
